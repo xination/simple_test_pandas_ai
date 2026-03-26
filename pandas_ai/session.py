@@ -6,6 +6,11 @@ from .prompting import build_user_prompt
 from .schema import normalize_dfs
 
 
+class AIResult(str):
+    def __repr__(self):
+        return str(self)
+
+
 class AISession(object):
     def __init__(self, backend, system_prompt):
         self.backend = backend
@@ -41,4 +46,4 @@ class AISession(object):
         user_prompt = build_user_prompt(text=text, df_map=df_map)
         raw_text = self.backend.generate(system_prompt=self.system_prompt, user_prompt=user_prompt)
         code = extract_code(raw_text)
-        return "# backend: {0}\n{1}".format(self.backend.name, code)
+        return AIResult("[{0}] {1}".format(self.backend.name, code))

@@ -158,7 +158,7 @@ class PublicApiTests(unittest.TestCase):
 
         result = ask_ai("sum the column", dfs=df)
 
-        self.assertIn("# backend: fake", result)
+        self.assertIn("[fake]", result)
         self.assertIn("result = df['value'].sum()", result)
         self.assertIn("DataFrame `df` shape=(3, 1)", backend.calls[0][1])
 
