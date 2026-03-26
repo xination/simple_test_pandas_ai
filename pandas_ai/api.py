@@ -1,0 +1,35 @@
+from .config import load_config
+from .session import AISession
+
+_SESSION = None
+
+
+def setup_ai(
+    backend="claude",
+    model=None,
+    api_key=None,
+    base_url=None,
+    system_prompt=None,
+    timeout=30,
+    max_tokens=1024,
+    **kwargs
+):
+    global _SESSION
+    config = load_config(
+        backend=backend,
+        model=model,
+        api_key=api_key,
+        base_url=base_url,
+        system_prompt=system_prompt,
+        timeout=timeout,
+        max_tokens=max_tokens,
+        extra=kwargs,
+    )
+    _SESSION = AISession.from_config(config)
+
+
+def ask_ai(text, dfs=None):
+    global _SESSION
+    if _SESSION is None:
+        setup_ai()
+    return _SESSION.ask_ai(text=text, dfs=dfs)
