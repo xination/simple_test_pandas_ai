@@ -9,9 +9,6 @@ from .parsing import extract_code
 from .prompting import build_user_prompt
 from .schema import normalize_dfs
 
-GREEN = "\033[102m"
-COLOREND = "\033[49m"
-
 class AIResult(str):
     def __repr__(self):
         return str(self)
@@ -89,7 +86,7 @@ class AISession(object):
         if output_format != "text":
             raise ConfigurationError("Unsupported output_format `{0}`. Supported values: text, json.".format(output_format))
         code = extract_code(raw_text)
-        return AIResult("{0}{1}{2}".format(GREEN, code, COLOREND))
+        return AIResult(code)
 
 
 def _default_stream_handler(chunk):

@@ -277,8 +277,7 @@ class PublicApiTests(unittest.TestCase):
 
         result = ask_ai("sum the column", dfs=df)
 
-        self.assertIn("[fake]", result)
-        self.assertIn("result = df['value'].sum()", result)
+        self.assertEqual("result = df['value'].sum()", result)
         self.assertIn("DataFrame `df` shape=(3, 1)", backend.calls[0][1])
 
     def test_ask_ai_accepts_multiple_dataframes(self):
@@ -334,7 +333,7 @@ class PublicApiTests(unittest.TestCase):
 
         result = ask_ai("sum the column", dfs=df)
 
-        self.assertEqual("[fake] result = df['value'].sum()", result)
+        self.assertEqual("result = df['value'].sum()", result)
         self.assertEqual(["```python\n", "result = df['value'].sum()\n", "```"], handler.chunks)
 
     @mock.patch("pandas_ai.session.time.sleep")
@@ -352,7 +351,7 @@ class PublicApiTests(unittest.TestCase):
 
         result = ask_ai("sum the column", dfs=df)
 
-        self.assertEqual("[fake] result = df['value'].sum()", result)
+        self.assertEqual("result = df['value'].sum()", result)
         self.assertEqual(3, mocked_sleep.call_count)
         mocked_sleep.assert_called_with(0.2)
 
@@ -364,7 +363,7 @@ class PublicApiTests(unittest.TestCase):
         api_module._SESSION.stream = False
         result = ask_ai("sum the column", dfs=df)
 
-        self.assertEqual("[fake] result = df['value'].sum()", result)
+        self.assertEqual("result = df['value'].sum()", result)
 
     @mock.patch("sys.stdout")
     def test_ask_ai_stream_default_handler_is_silent(self, mocked_stdout):
@@ -374,7 +373,7 @@ class PublicApiTests(unittest.TestCase):
 
         result = ask_ai("sum the column", dfs=df)
 
-        self.assertEqual("[fake] result = df['value'].sum()", result)
+        self.assertEqual("result = df['value'].sum()", result)
         mocked_stdout.write.assert_not_called()
         mocked_stdout.flush.assert_not_called()
 
@@ -391,7 +390,7 @@ class PublicApiTests(unittest.TestCase):
 
         result = ask_ai("sum the column", dfs=df)
 
-        self.assertEqual("[fake] result = df['value'].sum()", result)
+        self.assertEqual("result = df['value'].sum()", result)
         self.assertEqual(3, mocked_stdout.write.call_count)
         mocked_stdout.flush.assert_called()
 

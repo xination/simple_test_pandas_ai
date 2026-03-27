@@ -55,7 +55,7 @@ Implemented:
   - `PANDAS_AI_BASE_URL`
   - `PANDAS_AI_SYSTEM_PROMPT`
   - `ANTHROPIC_API_KEY`
-- `ask_ai()` always returns a short backend note plus copy/paste-ready code text when `output_format="text"`.
+- `ask_ai()` returns copy/paste-ready code text when `output_format="text"`.
 - Streaming is configured on `setup_ai()` and defaults to writing partial chunks to stdout.
 - `setup_ai(..., stream_handler=callable)` allows custom handling of streamed chunks without changing the `ask_ai()` return type.
 - `output_format="json"` assembles partial chunks and parses JSON only after the final response is complete.
