@@ -3,6 +3,7 @@ import os
 DEFAULT_ANTHROPIC_BASE_URL = "https://api.anthropic.com"
 DEFAULT_ANTHROPIC_MODEL = "claude-haiku-4-5-20251001"
 DEFAULT_LMSTUDIO_BASE_URL = "http://127.0.0.1:1234/v1"
+DEFAULT_LMSTUDIO_MODEL = "qwen2.5-coder-3b-instruct"
 DEFAULT_SYSTEM_PROMPT = (
     "You are a pandas assistant. Return only Python/pandas code that the user "
     "can copy and paste into a Python REPL. Use only the provided dataframe "
@@ -49,7 +50,7 @@ def load_config(
         resolved_api_key = _coalesce(api_key, os.environ.get("ANTHROPIC_API_KEY"))
     elif backend_name == "lmstudio":
         resolved_base_url = _coalesce(base_url, env_base_url) or DEFAULT_LMSTUDIO_BASE_URL
-        resolved_model = resolved_model or "local-model"
+        resolved_model = resolved_model or DEFAULT_LMSTUDIO_MODEL
         resolved_api_key = _coalesce(api_key, os.environ.get("OPENAI_API_KEY"), "not-needed")
     else:
         resolved_base_url = _coalesce(base_url, env_base_url)

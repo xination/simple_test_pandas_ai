@@ -9,7 +9,7 @@ from pandas_ai import ask_ai, setup_ai
 from pandas_ai import api as api_module
 from pandas_ai.backends.anthropic import AnthropicBackend
 from pandas_ai.backends.openai_compat import OpenAICompatBackend
-from pandas_ai.config import DEFAULT_ANTHROPIC_MODEL, load_config
+from pandas_ai.config import DEFAULT_ANTHROPIC_MODEL, DEFAULT_LMSTUDIO_MODEL, load_config
 from pandas_ai.errors import BackendError, ConfigurationError
 from pandas_ai.parsing import extract_code
 
@@ -112,6 +112,12 @@ class ConfigTests(unittest.TestCase):
         self.assertEqual(DEFAULT_ANTHROPIC_MODEL, config["model"])
         self.assertTrue(config["stream"])
         self.assertEqual(0.0, config["stream_delay"])
+
+    @mock.patch.dict(os.environ, {}, clear=True)
+    def test_load_config_uses_default_lmstudio_model(self):
+        config = load_config(backend="lmstudio")
+        self.assertEqual(DEFAULT_LMSTUDIO_MODEL, config["model"])
+        self.assertEqual("http://127.0.0.1:1234/v1", config["base_url"])
 
 
 class BackendTests(unittest.TestCase):
