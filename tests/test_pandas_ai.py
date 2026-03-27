@@ -17,15 +17,32 @@ from pandas_ai.parsing import extract_code
 class DummyResponse(object):
     def __init__(self, payload):
         self.payload = payload
+        self._lines = None
 
     def read(self):
         return json.dumps(self.payload).encode("utf-8")
+
+    def readline(self):
+        if self._lines is None:
+            self._lines = []
+        if self._lines:
+            return self._lines.pop(0)
+        return b""
 
     def __enter__(self):
         return self
 
     def __exit__(self, exc_type, exc, tb):
         return False
+
+
+class DummyStreamResponse(DummyResponse):
+    def __init__(self, lines):
+        super(DummyStreamResponse, self).__init__(payload=None)
+        self._lines = [line.encode("utf-8") for line in lines]
+
+    def read(self):
+        raise AssertionError("stream responses should be consumed via readline()")
 
 
 class FakeBackend(object):
@@ -37,6 +54,30 @@ class FakeBackend(object):
     def generate(self, system_prompt, user_prompt):
         self.calls.append((system_prompt, user_prompt))
         return "```python\nresult = df['value'].sum()\n```"
+
+    def stream_generate(self, system_prompt, user_prompt):
+        self.calls.append((system_prompt, user_prompt))
+        for chunk in ("```python\n", "result = df['value'].sum()\n", "```"):
+            yield chunk
+
+
+class JsonBackend(object):
+    name = "fake-json"
+
+    def generate(self, system_prompt, user_prompt):
+        return '{"ok": true, "rows": 3}'
+
+    def stream_generate(self, system_prompt, user_prompt):
+        for chunk in ('{"ok": ', 'true, ', '"rows": 3}'):
+            yield chunk
+
+
+class CollectingHandler(object):
+    def __init__(self):
+        self.chunks = []
+
+    def __call__(self, chunk):
+        self.chunks.append(chunk)
 
 
 class DummyDataFrame(object):
@@ -62,11 +103,15 @@ class ConfigTests(unittest.TestCase):
         self.assertEqual("claude", config["backend"])
         self.assertEqual("env-key", config["api_key"])
         self.assertEqual("env-model", config["model"])
+        self.assertTrue(config["stream"])
+        self.assertEqual(0.0, config["stream_delay"])
 
     @mock.patch.dict(os.environ, {}, clear=True)
     def test_load_config_uses_default_claude_model(self):
         config = load_config()
         self.assertEqual(DEFAULT_ANTHROPIC_MODEL, config["model"])
+        self.assertTrue(config["stream"])
+        self.assertEqual(0.0, config["stream_delay"])
 
 
 class BackendTests(unittest.TestCase):
@@ -129,6 +174,61 @@ class BackendTests(unittest.TestCase):
         self.assertEqual(88, payload["max_tokens"])
         self.assertEqual("Bearer token", req.headers["Authorization"])
 
+    @mock.patch("urllib.request.urlopen")
+    def test_openai_compat_streaming(self, mocked_urlopen):
+        mocked_urlopen.return_value = DummyStreamResponse(
+            [
+                'data: {"choices":[{"delta":{"content":"result = "}}]}\n',
+                "\n",
+                'data: {"choices":[{"delta":{"content":"df.tail()"}}]}\n',
+                "\n",
+                "data: [DONE]\n",
+                "\n",
+            ]
+        )
+        backend = OpenAICompatBackend(
+            model="local-model",
+            api_key="token",
+            base_url="http://127.0.0.1:1234/v1",
+            timeout=8,
+            max_tokens=88,
+        )
+
+        chunks = list(backend.stream_generate(system_prompt="sys", user_prompt="usr"))
+
+        self.assertEqual(["result = ", "df.tail()"], chunks)
+        req = mocked_urlopen.call_args[0][0]
+        payload = json.loads(req.data.decode("utf-8"))
+        self.assertTrue(payload["stream"])
+
+    @mock.patch("urllib.request.urlopen")
+    def test_anthropic_streaming(self, mocked_urlopen):
+        mocked_urlopen.return_value = DummyStreamResponse(
+            [
+                'event: content_block_delta\n',
+                'data: {"type":"content_block_delta","delta":{"text":"result = "}}\n',
+                "\n",
+                'data: {"type":"content_block_delta","delta":{"text":"df.head()"}}\n',
+                "\n",
+                'data: {"type":"message_stop"}\n',
+                "\n",
+            ]
+        )
+        backend = AnthropicBackend(
+            model="claude-sonnet-4-20250514",
+            api_key="secret",
+            base_url="https://api.anthropic.com",
+            timeout=12,
+            max_tokens=321,
+        )
+
+        chunks = list(backend.stream_generate(system_prompt="sys", user_prompt="usr"))
+
+        self.assertEqual(["result = ", "df.head()"], chunks)
+        req = mocked_urlopen.call_args[0][0]
+        payload = json.loads(req.data.decode("utf-8"))
+        self.assertTrue(payload["stream"])
+
 
 class ParsingTests(unittest.TestCase):
     def test_extract_code_from_fence(self):
@@ -146,14 +246,33 @@ class PublicApiTests(unittest.TestCase):
     def test_setup_ai_creates_default_claude_session(self):
         setup_ai()
         self.assertEqual("claude", api_module._SESSION.backend.name)
+        self.assertTrue(api_module._SESSION.stream)
 
     def test_setup_ai_can_switch_to_lmstudio(self):
         setup_ai(backend="lmstudio", base_url="http://127.0.0.1:1234/v1")
         self.assertEqual("lmstudio", api_module._SESSION.backend.name)
+        self.assertTrue(api_module._SESSION.stream)
+
+    def test_setup_ai_supports_streamming_alias(self):
+        setup_ai(streamming=False)
+        self.assertFalse(api_module._SESSION.stream)
+
+    def test_setup_ai_accepts_stream_handler(self):
+        handler = CollectingHandler()
+        setup_ai(stream=True, stream_handler=handler)
+        self.assertIs(handler, api_module._SESSION.stream_handler)
+
+    def test_setup_ai_accepts_stream_output(self):
+        setup_ai(stream=True, stream_output=True)
+        self.assertTrue(api_module._SESSION.stream_output)
+
+    def test_setup_ai_accepts_stream_delay(self):
+        setup_ai(stream=True, stream_delay=0.25)
+        self.assertEqual(0.25, api_module._SESSION.stream_delay)
 
     def test_ask_ai_accepts_single_dataframe(self):
         backend = FakeBackend()
-        api_module._SESSION = api_module.AISession(backend=backend, system_prompt="sys")
+        api_module._SESSION = api_module.AISession(backend=backend, system_prompt="sys", stream=False)
         df = DummyDataFrame({"value": [1, 2, 3]})
 
         result = ask_ai("sum the column", dfs=df)
@@ -164,7 +283,7 @@ class PublicApiTests(unittest.TestCase):
 
     def test_ask_ai_accepts_multiple_dataframes(self):
         backend = FakeBackend()
-        api_module._SESSION = api_module.AISession(backend=backend, system_prompt="sys")
+        api_module._SESSION = api_module.AISession(backend=backend, system_prompt="sys", stream=False)
         df0 = DummyDataFrame({"value": [1]})
         df1 = DummyDataFrame({"other": [2]})
 
@@ -176,7 +295,7 @@ class PublicApiTests(unittest.TestCase):
 
     def test_ask_ai_accepts_named_mapping(self):
         backend = FakeBackend()
-        api_module._SESSION = api_module.AISession(backend=backend, system_prompt="sys")
+        api_module._SESSION = api_module.AISession(backend=backend, system_prompt="sys", stream=False)
         users = DummyDataFrame({"user_id": [1]})
         sales = DummyDataFrame({"amount": [5]})
 
@@ -188,7 +307,7 @@ class PublicApiTests(unittest.TestCase):
 
     def test_ask_ai_uses_caller_df_by_default(self):
         backend = FakeBackend()
-        api_module._SESSION = api_module.AISession(backend=backend, system_prompt="sys")
+        api_module._SESSION = api_module.AISession(backend=backend, system_prompt="sys", stream=False)
         df = DummyDataFrame({"value": [1, 2]})
 
         result = ask_ai("sum it")
@@ -198,9 +317,99 @@ class PublicApiTests(unittest.TestCase):
 
     def test_ask_ai_without_df_raises(self):
         backend = FakeBackend()
-        api_module._SESSION = api_module.AISession(backend=backend, system_prompt="sys")
+        api_module._SESSION = api_module.AISession(backend=backend, system_prompt="sys", stream=False)
         with self.assertRaises(ConfigurationError):
             ask_ai("sum it")
+
+    def test_ask_ai_streams_by_default(self):
+        backend = FakeBackend()
+        handler = CollectingHandler()
+        api_module._SESSION = api_module.AISession(
+            backend=backend,
+            system_prompt="sys",
+            stream=True,
+            stream_handler=handler,
+        )
+        df = DummyDataFrame({"value": [1, 2, 3]})
+
+        result = ask_ai("sum the column", dfs=df)
+
+        self.assertEqual("[fake] result = df['value'].sum()", result)
+        self.assertEqual(["```python\n", "result = df['value'].sum()\n", "```"], handler.chunks)
+
+    @mock.patch("pandas_ai.session.time.sleep")
+    def test_ask_ai_stream_delay_sleeps_per_chunk(self, mocked_sleep):
+        backend = FakeBackend()
+        handler = CollectingHandler()
+        api_module._SESSION = api_module.AISession(
+            backend=backend,
+            system_prompt="sys",
+            stream=True,
+            stream_handler=handler,
+            stream_delay=0.2,
+        )
+        df = DummyDataFrame({"value": [1, 2, 3]})
+
+        result = ask_ai("sum the column", dfs=df)
+
+        self.assertEqual("[fake] result = df['value'].sum()", result)
+        self.assertEqual(3, mocked_sleep.call_count)
+        mocked_sleep.assert_called_with(0.2)
+
+    def test_ask_ai_stream_false_preserves_string_result(self):
+        backend = FakeBackend()
+        api_module._SESSION = api_module.AISession(backend=backend, system_prompt="sys", stream=True)
+        df = DummyDataFrame({"value": [1, 2, 3]})
+
+        api_module._SESSION.stream = False
+        result = ask_ai("sum the column", dfs=df)
+
+        self.assertEqual("[fake] result = df['value'].sum()", result)
+
+    @mock.patch("sys.stdout")
+    def test_ask_ai_stream_default_handler_is_silent(self, mocked_stdout):
+        backend = FakeBackend()
+        api_module._SESSION = api_module.AISession(backend=backend, system_prompt="sys", stream=True)
+        df = DummyDataFrame({"value": [1, 2, 3]})
+
+        result = ask_ai("sum the column", dfs=df)
+
+        self.assertEqual("[fake] result = df['value'].sum()", result)
+        mocked_stdout.write.assert_not_called()
+        mocked_stdout.flush.assert_not_called()
+
+    @mock.patch("sys.stdout")
+    def test_ask_ai_stream_output_writes_to_stdout(self, mocked_stdout):
+        backend = FakeBackend()
+        api_module._SESSION = api_module.AISession(
+            backend=backend,
+            system_prompt="sys",
+            stream=True,
+            stream_output=True,
+        )
+        df = DummyDataFrame({"value": [1, 2, 3]})
+
+        result = ask_ai("sum the column", dfs=df)
+
+        self.assertEqual("[fake] result = df['value'].sum()", result)
+        self.assertEqual(3, mocked_stdout.write.call_count)
+        mocked_stdout.flush.assert_called()
+
+    def test_ask_ai_json_stream_parses_only_at_final(self):
+        backend = JsonBackend()
+        handler = CollectingHandler()
+        api_module._SESSION = api_module.AISession(
+            backend=backend,
+            system_prompt="sys",
+            stream=True,
+            stream_handler=handler,
+        )
+        df = DummyDataFrame({"value": [1, 2, 3]})
+
+        result = ask_ai("return json", dfs=df, output_format="json")
+
+        self.assertEqual('{"ok": true, "rows": 3}', result)
+        self.assertEqual(['{"ok": ', 'true, ', '"rows": 3}'], handler.chunks)
 
 
 if __name__ == "__main__":

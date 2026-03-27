@@ -6,8 +6,8 @@ This workspace contains a fresh implementation of a lightweight interactive pand
 
 Public API:
 
-- `setup_ai(...)`
-- `ask_ai(text, dfs=None)`
+- `setup_ai(..., stream=True, stream_output=False, stream_delay=0.0, stream_handler=None)`
+- `ask_ai(text, dfs=None, output_format="text")`
 
 Reference repo:
 
@@ -20,8 +20,10 @@ Core package layout:
 - `pandas_ai/api.py`
   - Public entrypoints.
   - Stores the singleton session.
+- `pandas_ai/interactive.py`
+  - Optional helper for suppressing duplicate `AIResult` echo in plain Python REPL sessions.
 - `pandas_ai/session.py`
-  - Orchestrates prompt building, backend invocation, and response parsing.
+  - Orchestrates prompt building, backend invocation, optional streaming side effects, and response parsing.
 - `pandas_ai/config.py`
   - Resolves defaults and environment variables.
 - `pandas_ai/schema.py`
@@ -41,7 +43,11 @@ Core package layout:
 Implemented:
 
 - Default backend is `claude` via Anthropic Messages API.
+- Default Claude model is `claude-haiku-4-5-20251001`.
 - Secondary backend is `lmstudio` via OpenAI-compatible HTTP API.
+- Default streaming mode is enabled and emits chunks through a handler while still returning the final result.
+- `stream_output=True` uses a built-in stdout handler.
+- `stream_delay` can intentionally slow chunk handling for demo and manual verification.
 - Environment variable support:
   - `PANDAS_AI_BACKEND`
   - `PANDAS_AI_MODEL`
@@ -49,18 +55,24 @@ Implemented:
   - `PANDAS_AI_BASE_URL`
   - `PANDAS_AI_SYSTEM_PROMPT`
   - `ANTHROPIC_API_KEY`
-- `ask_ai()` returns a short backend note plus copy/paste-ready code text.
+- `ask_ai()` always returns a short backend note plus copy/paste-ready code text when `output_format="text"`.
+- Streaming is configured on `setup_ai()` and defaults to writing partial chunks to stdout.
+- `setup_ai(..., stream_handler=callable)` allows custom handling of streamed chunks without changing the `ask_ai()` return type.
+- `output_format="json"` assembles partial chunks and parses JSON only after the final response is complete.
 - `ask_ai(dfs=None)` attempts to discover a caller-side `df` from the Python stack.
 - Unit tests cover config, backend payload shape, prompt assembly, parsing, and dataframe normalization.
 
 Current limitations:
 
 - No packaging metadata yet beyond the minimal module layout.
-- No example scripts yet for actual REPL usage.
 - No conversation memory.
 - No automatic code execution or sandbox.
 - No local transformer backend implementation yet.
 - The current environment used during implementation did not have `pandas` installed, so tests use dataframe-like dummy objects.
+
+Examples:
+
+- `examples/chicago_housing_demo.py` provides a small in-memory Chicago housing style demo dataset and a simple `ask_ai()` call.
 
 ## Testing
 

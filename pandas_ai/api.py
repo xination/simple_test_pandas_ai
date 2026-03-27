@@ -10,17 +10,24 @@ def setup_ai(
     api_key=None,
     base_url=None,
     system_prompt=None,
+    stream=True,
+    stream_output=False,
+    stream_delay=0.0,
     timeout=30,
     max_tokens=1024,
     **kwargs
 ):
     global _SESSION
+    stream = kwargs.pop("streamming", stream)
     config = load_config(
         backend=backend,
         model=model,
         api_key=api_key,
         base_url=base_url,
         system_prompt=system_prompt,
+        stream=stream,
+        stream_output=stream_output,
+        stream_delay=stream_delay,
         timeout=timeout,
         max_tokens=max_tokens,
         extra=kwargs,
@@ -28,8 +35,8 @@ def setup_ai(
     _SESSION = AISession.from_config(config)
 
 
-def ask_ai(text, dfs=None):
+def ask_ai(text, dfs=None, output_format="text"):
     global _SESSION
     if _SESSION is None:
         setup_ai()
-    return _SESSION.ask_ai(text=text, dfs=dfs)
+    return _SESSION.ask_ai(text=text, dfs=dfs, output_format=output_format)

@@ -1,7 +1,7 @@
 import os
 
 DEFAULT_ANTHROPIC_BASE_URL = "https://api.anthropic.com"
-DEFAULT_ANTHROPIC_MODEL = "claude-sonnet-4-20250514"
+DEFAULT_ANTHROPIC_MODEL = "claude-haiku-4-5-20251001"
 DEFAULT_LMSTUDIO_BASE_URL = "http://127.0.0.1:1234/v1"
 DEFAULT_SYSTEM_PROMPT = (
     "You are a pandas assistant. Return only Python/pandas code that the user "
@@ -24,6 +24,9 @@ def load_config(
     api_key=None,
     base_url=None,
     system_prompt=None,
+    stream=True,
+    stream_output=False,
+    stream_delay=0.0,
     timeout=30,
     max_tokens=1024,
     extra=None,
@@ -57,6 +60,10 @@ def load_config(
         "model": resolved_model,
         "api_key": resolved_api_key,
         "base_url": resolved_base_url,
+        "stream": bool(stream),
+        "stream_output": bool(stream_output),
+        "stream_delay": float(stream_delay or 0.0),
+        "stream_handler": extra.get("stream_handler") if extra else None,
         "timeout": resolved_timeout,
         "max_tokens": int(max_tokens),
         "system_prompt": resolved_system_prompt or DEFAULT_SYSTEM_PROMPT,

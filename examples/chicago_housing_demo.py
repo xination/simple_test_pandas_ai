@@ -10,6 +10,7 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from pandas_ai import ask_ai, setup_ai
+from pandas_ai.interactive import color_stream_handler, enable_ai_result_displayhook
 
 
 def build_demo_dataframe():
@@ -29,11 +30,17 @@ def build_demo_dataframe():
 
  
 
-
 if __name__ == "__main__":
     df = build_demo_dataframe()
 
-    # Reads ANTHROPIC_API_KEY and default model from environment by default.
-    setup_ai( )
-    print( """try -> ask_ai("average list_price by community_area )""" )
-    
+    use_stream = False
+
+    if use_stream:
+        enable_ai_result_displayhook()
+        setup_ai(stream=True, stream_delay=1.0, stream_handler=color_stream_handler)
+    else:
+        enable_ai_result_displayhook()
+        setup_ai(stream=False)
+
+    print("""try -> ask_ai("average list_price by community_area" )""")
+  

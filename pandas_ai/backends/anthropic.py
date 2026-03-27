@@ -24,12 +24,33 @@ class AnthropicBackend(BaseBackend):
         self.max_tokens = max_tokens
 
     def generate(self, system_prompt, user_prompt):
+        response = self._request(system_prompt=system_prompt, user_prompt=user_prompt, stream=False)
+        return self._parse_response(response)
+
+    def stream_generate(self, system_prompt, user_prompt):
+        response = self._request(system_prompt=system_prompt, user_prompt=user_prompt, stream=True)
+        for payload in self._iter_sse_payloads(response):
+            try:
+                body = json.loads(payload)
+                event_type = body.get("type")
+                if event_type == "content_block_delta":
+                    text = body.get("delta", {}).get("text", "")
+                else:
+                    text = ""
+            except (ValueError, AttributeError) as exc:
+                raise BackendError("Anthropic streaming payload was invalid: {0}".format(exc))
+            if text:
+                yield text
+
+    def _request(self, system_prompt, user_prompt, stream):
         payload = {
             "model": self.model,
             "max_tokens": self.max_tokens,
             "system": system_prompt,
             "messages": [{"role": "user", "content": user_prompt}],
         }
+        if stream:
+            payload["stream"] = True
         endpoint = "{0}/v1/messages".format(self.base_url)
         body = json.dumps(payload).encode("utf-8")
         headers = {
@@ -39,8 +60,7 @@ class AnthropicBackend(BaseBackend):
         }
         req = request.Request(endpoint, data=body, headers=headers, method="POST")
         try:
-            with request.urlopen(req, timeout=self.timeout) as response:
-                raw = response.read().decode("utf-8")
+            return request.urlopen(req, timeout=self.timeout)
         except error.HTTPError as exc:
             detail = exc.read().decode("utf-8", errors="replace")
             raise BackendError("Anthropic API request failed with status {0}: {1}".format(exc.code, detail))
@@ -50,7 +70,10 @@ class AnthropicBackend(BaseBackend):
                 "switch to setup_ai(backend='lmstudio', base_url='http://127.0.0.1:1234/v1').".format(exc.reason)
             )
 
+    def _parse_response(self, response):
         try:
+            with response:
+                raw = response.read().decode("utf-8")
             payload = json.loads(raw)
             content = payload.get("content", [])
             text_parts = [item.get("text", "") for item in content if item.get("type") == "text"]
@@ -61,3 +84,19 @@ class AnthropicBackend(BaseBackend):
         if not text:
             raise BackendError("Anthropic API returned no text content.")
         return text
+
+    def _iter_sse_payloads(self, response):
+        with response:
+            data_lines = []
+            while True:
+                line = response.readline()
+                if not line:
+                    break
+                text = line.decode("utf-8").strip()
+                if not text:
+                    if data_lines:
+                        yield "\n".join(data_lines)
+                        data_lines = []
+                    continue
+                if text.startswith("data:"):
+                    data_lines.append(text[5:].strip())
