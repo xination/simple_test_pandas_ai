@@ -1,104 +1,104 @@
-# Development Notes
+# 開發筆記
 
-## Current Scope
+## 目前範圍
 
-This workspace contains a fresh implementation of a lightweight interactive pandas AI helper in `pandas_ai/`.
+這個 workspace 目前包含一份全新實作的輕量互動式 pandas AI helper，主程式位於 `pandas_ai/`。
 
-Public API:
+公開 API：
 
 - `setup_ai(..., stream=True, stream_output=False, stream_delay=0.0, stream_handler=None)`
 - `ask_ai(text, dfs=None, output_format="text")`
 
-Reference repo:
+參考 repo：
 
-- `repo_inspect/` is a clone of the original `DashyDashOrg/pandas-llm` project and is kept only for comparison.
+- `repo_inspect/` 是原始 `DashyDashOrg/pandas-llm` 專案的 clone，目前僅用於比較與參考。
 
-## Current Architecture
+## 目前架構
 
-Core package layout:
+核心套件結構：
 
 - `pandas_ai/api.py`
-  - Public entrypoints.
-  - Stores the singleton session.
+  - 對外公開的進入點。
+  - 保存 singleton session。
 - `pandas_ai/interactive.py`
-  - Optional helper for suppressing duplicate `AIResult` echo in plain Python REPL sessions.
+  - 一個可選的小工具，用來在一般 Python REPL 中避免 `AIResult` 被重複回顯。
 - `pandas_ai/session.py`
-  - Orchestrates prompt building, backend invocation, optional streaming side effects, and response parsing.
+  - 負責協調 prompt 建立、backend 呼叫、可選的串流副作用，以及回應解析。
 - `pandas_ai/config.py`
-  - Resolves defaults and environment variables.
+  - 處理預設值與環境變數解析。
 - `pandas_ai/schema.py`
-  - Normalizes dataframe inputs and builds dataframe schema context.
-  - Supports `dfs=None`, a single dataframe, a sequence of dataframes, or a mapping of names to dataframes.
+  - 正規化 dataframe 輸入，並建立 dataframe schema context。
+  - 支援 `dfs=None`、單一 dataframe、多個 dataframe 序列，或名稱對 dataframe 的 mapping。
 - `pandas_ai/prompting.py`
-  - Builds the user prompt from dataframe schema and user request.
+  - 根據 dataframe schema 與使用者需求建立 user prompt。
 - `pandas_ai/parsing.py`
-  - Extracts code from plain text or fenced code blocks.
+  - 從純文字或 fenced code block 中擷取程式碼。
 - `pandas_ai/backends/anthropic.py`
-  - Anthropic Messages API backend.
+  - Anthropic Messages API backend。
 - `pandas_ai/backends/openai_compat.py`
-  - OpenAI-compatible backend for LM Studio and similar local servers.
+  - 給 LM Studio 與類似本機服務使用的 OpenAI-compatible backend。
 
-## Status
+## 目前狀態
 
-Implemented:
+已完成：
 
-- Default backend is `claude` via Anthropic Messages API.
-- Default Claude model is `claude-haiku-4-5-20251001`.
-- Secondary backend is `lmstudio` via OpenAI-compatible HTTP API.
-- Default streaming mode is enabled and emits chunks through a handler while still returning the final result.
-- `stream_output=True` uses a built-in stdout handler.
-- `stream_delay` can intentionally slow chunk handling for demo and manual verification.
-- Environment variable support:
+- 預設 backend 為透過 Anthropic Messages API 的 `claude`。
+- 預設 Claude model 為 `claude-haiku-4-5-20251001`。
+- 次要 backend 為透過 OpenAI-compatible HTTP API 的 `lmstudio`。
+- 預設已啟用串流模式，會透過 handler 輸出 chunk，同時仍回傳最終結果。
+- `stream_output=True` 會使用內建的 stdout handler。
+- `stream_delay` 可刻意放慢 chunk 處理速度，方便 demo 與人工確認。
+- 支援環境變數：
   - `PANDAS_AI_BACKEND`
   - `PANDAS_AI_MODEL`
   - `PANDAS_AI_TIMEOUT`
   - `PANDAS_AI_BASE_URL`
   - `PANDAS_AI_SYSTEM_PROMPT`
   - `ANTHROPIC_API_KEY`
-- `ask_ai()` returns copy/paste-ready code text when `output_format="text"`.
-- Streaming is configured on `setup_ai()` and defaults to writing partial chunks to stdout.
-- `setup_ai(..., stream_handler=callable)` allows custom handling of streamed chunks without changing the `ask_ai()` return type.
-- `output_format="json"` assembles partial chunks and parses JSON only after the final response is complete.
-- `ask_ai(dfs=None)` attempts to discover a caller-side `df` from the Python stack.
-- Unit tests cover config, backend payload shape, prompt assembly, parsing, and dataframe normalization.
+- 當 `output_format="text"` 時，`ask_ai()` 會回傳可直接複製貼上的程式碼文字。
+- 串流是在 `setup_ai()` 階段設定，並可預設將部分 chunk 輸出到 stdout。
+- `setup_ai(..., stream_handler=callable)` 可自訂串流 chunk 的處理方式，而不改變 `ask_ai()` 的回傳型別。
+- `output_format="json"` 會先組裝完整回應，最後才解析 JSON。
+- `ask_ai(dfs=None)` 會嘗試從 Python 呼叫堆疊中尋找呼叫端的 `df`。
+- 單元測試涵蓋 config、backend payload 結構、prompt 組裝、parsing，以及 dataframe 正規化。
 
-Current limitations:
+目前限制：
 
-- No packaging metadata yet beyond the minimal module layout.
-- No conversation memory.
-- No automatic code execution or sandbox.
-- No local transformer backend implementation yet.
-- The current environment used during implementation did not have `pandas` installed, so tests use dataframe-like dummy objects.
+- 除了最小模組結構外，尚未加入 packaging metadata。
+- 尚未提供對話記憶。
+- 不會自動執行程式碼，也沒有 sandbox。
+- 尚未實作本機 transformer backend。
+- 開發時所使用的環境沒有安裝 `pandas`，因此測試使用 dataframe-like 的 dummy objects。
 
-Examples:
+範例：
 
-- `examples/chicago_housing_demo.py` provides a small in-memory Chicago housing style demo dataset and a simple `ask_ai()` call.
+- `examples/chicago_housing_demo.py` 提供一個小型的 Chicago housing 風格記憶體內資料集，以及一個簡單的 `ask_ai()` 範例呼叫。
 
-## Testing
+## 測試
 
-Primary test command used:
+主要使用的測試指令：
 
 ```bash
 python -m unittest tests.test_pandas_ai -v
 ```
 
-Additional syntax verification used:
+額外執行過的語法驗證：
 
 ```bash
 python -m py_compile pandas_ai/__init__.py pandas_ai/api.py pandas_ai/config.py pandas_ai/errors.py pandas_ai/schema.py pandas_ai/prompting.py pandas_ai/parsing.py pandas_ai/session.py pandas_ai/backends/__init__.py pandas_ai/backends/base.py pandas_ai/backends/anthropic.py pandas_ai/backends/openai_compat.py tests/test_pandas_ai.py
 ```
 
-## Notes For Next Pass
+## 下一輪建議
 
-When switching to a Linux workspace with `pandas` installed, the next useful steps are:
+當切換到已安裝 `pandas` 的 Linux workspace 後，下一步較有價值的工作如下：
 
-1. Replace or supplement dummy dataframe tests with real pandas DataFrame tests.
-2. Add a small end-to-end example script for REPL / IPython usage.
-3. Add packaging files if this should become installable.
-4. Decide whether `ask_ai(dfs=None)` stack inspection is acceptable long-term or should be replaced by an explicit namespace argument.
-5. Add an optional local backend implementation if air-gapped use is a first-class target.
+1. 以真實 pandas DataFrame 測試取代或補強目前的 dummy dataframe 測試。
+2. 增加一個適用於 REPL / IPython 的小型 end-to-end 範例腳本。
+3. 如果這個專案要提供安裝，加入 packaging 檔案。
+4. 決定 `ask_ai(dfs=None)` 的 stack inspection 是否適合作為長期設計，還是應改為明確的 namespace 參數。
+5. 如果 air-gap 使用情境是第一級需求，加入可選的本機 backend 實作。
 
-## Git / Workspace Notes
+## Git / Workspace 備註
 
-- The current workspace root is the local clone of this repository.
-- `repo_inspect/` is third-party reference code and should not be modified unless intentionally syncing or comparing behavior.
+- 目前的 workspace root 是此 repository 的本機 clone。
+- `repo_inspect/` 屬於第三方參考程式碼，除非是刻意同步或比較行為，否則不應修改。
