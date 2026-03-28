@@ -100,5 +100,5 @@ When switching to a Linux workspace with `pandas` installed, the next useful ste
 
 ## Git / Workspace Notes
 
-- The current workspace root is `C:\PL\Dropbox\3_my_program\experimenting\pandas_llm`.
+- The current workspace root is the local clone of this repository.
 - `repo_inspect/` is third-party reference code and should not be modified unless intentionally syncing or comparing behavior.

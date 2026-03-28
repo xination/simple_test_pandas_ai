@@ -1,37 +1,56 @@
 # pandas_ai
 
-Lightweight interactive pandas AI helper with two public functions:
+✨ 一個輕量、互動式的 pandas AI 小工具，主要提供兩個公開函式：
 
 - `setup_ai()`
 - `ask_ai()`
 
-Default backend is Anthropic Messages API (`backend="claude"`), with default model `claude-haiku-4-5-20251001`. LM Studio is supported through an OpenAI-compatible backend. Streaming is configured at `setup_ai()` time, enabled by default, and uses only the Python standard library.
+## 🚀 專案特色
 
-## Minimal usage
+- 🤖 預設使用 Anthropic Messages API（`backend="claude"`）
+- 🧠 預設模型為 `claude-haiku-4-5-20251001`
+- 🏠 支援透過 OpenAI 相容介面串接 LM Studio
+- 📡 串流輸出在 `setup_ai()` 階段設定，且預設啟用
+- 🐍 串流實作只依賴 Python 標準函式庫
+
+## 🧩 最小使用範例
 
 ```python
 from pandas_ai import setup_ai, ask_ai
 
 setup_ai(backend="claude", api_key="YOUR_ANTHROPIC_KEY")
-result = ask_ai("show the first 5 rows", df)
+result = ask_ai("顯示前 5 筆資料", df)
 print(result)
 ```
 
 ```python
 from pandas_ai import setup_ai, ask_ai
 
-setup_ai(backend="lmstudio", base_url="http://127.0.0.1:1234/v1", model="local-model", stream=False)
-print(ask_ai("join df0 and df1 on user_id", [df0, df1]))
+setup_ai(
+    backend="lmstudio",
+    base_url="http://127.0.0.1:1234/v1",
+    model="local-model",
+    stream=False,
+)
+print(ask_ai("依照 user_id 合併 df0 和 df1", [df0, df1]))
 ```
 
-When `stream=True`, `ask_ai()` still returns the final value. Use `stream_output=True` to print streamed chunks to stdout, or pass a custom `stream_handler`. The default handler is silent, so REPL usage does not print duplicate output. Use `stream_delay` if you want to slow chunk display down for visual confirmation.
+## 📡 串流輸出說明
+
+- `stream=True` 時，`ask_ai()` 仍然會回傳最終結果。
+- `stream_output=True` 可把串流片段直接印到標準輸出。
+- 也可以傳入自訂的 `stream_handler` 來接手處理串流內容。
+- 預設 handler 是靜默的，因此在 REPL 裡不會重複輸出相同內容。
+- 如果你想讓串流顯示慢一點、方便肉眼觀察，可以設定 `stream_delay`。
 
 ```python
 setup_ai(stream=True, stream_output=True, stream_delay=0.03)
-result = ask_ai("show the first 5 rows", df)
+result = ask_ai("顯示前 5 筆資料", df)
 ```
 
-If you are running in plain Python interactive mode and want streamed output without the final result being echoed again, enable the REPL helper once:
+## 🖥️ REPL 小技巧
+
+如果你是在一般 Python 互動模式中執行，想看到串流輸出、又不希望最終結果被再次自動回顯，可以先啟用一次：
 
 ```python
 from pandas_ai import enable_ai_result_displayhook
@@ -39,22 +58,22 @@ from pandas_ai import enable_ai_result_displayhook
 enable_ai_result_displayhook()
 ```
 
-When `output_format="json"`, partial chunks are not expected to be valid JSON. Parsing happens only after the complete response is assembled.
+## 🧾 JSON 輸出注意事項
 
-## Development
+當 `output_format="json"` 時，串流中的部分片段不保證是合法 JSON。系統會在完整回應組裝完成後，才進行解析。
 
-See `DEVELOPMENT.md` for architecture, status, and next-step notes.
+## 🛠️ 開發說明
 
-## Demo
+更多架構、目前狀態與後續規劃，請參考 `DEVELOPMENT.md`。
 
-A small Chicago housing style demo is available in `examples/chicago_housing_demo.py`.
-A local Hugging Face streaming demo is available in `examples/example2_local_qwen_stream.py`.
+## 🎬 Demo
+
+- 🏘️ Chicago housing 風格範例：`examples/chicago_housing_demo.py`
+- 🤗 本機 Hugging Face 串流範例：`examples/example2_local_qwen_stream.py`
 
 ```bash
 export ANTHROPIC_API_KEY="your_api_key"
 python examples/chicago_housing_demo.py
 ```
 
-The demo builds a tiny in-memory dataset with columns such as `community_area`,
-`housing_type`, `sqft`, and `list_price`, then asks the model to generate pandas
-code for a simple housing analysis task.
+這個 demo 會建立一個小型的記憶體內資料集，欄位包含 `community_area`、`housing_type`、`sqft` 與 `list_price`，再請模型生成 pandas 程式碼，完成簡單的房屋資料分析任務。
