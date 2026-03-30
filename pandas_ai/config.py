@@ -2,13 +2,16 @@ import os
 
 DEFAULT_ANTHROPIC_BASE_URL = "https://api.anthropic.com"
 DEFAULT_ANTHROPIC_MODEL = "claude-haiku-4-5-20251001"
-DEFAULT_LMSTUDIO_BASE_URL = "http://127.0.0.1:1234/v1"
-DEFAULT_LMSTUDIO_MODEL = "qwen2.5-coder-3b-instruct"
+DEFAULT_LMSTUDIO_BASE_URL = "http://192.168.40.1:1234/v1"
+DEFAULT_LMSTUDIO_MODEL = "google/gemma-3-4b"
+DEFAULT_BACKEND = "lmstudio"
 DEFAULT_SYSTEM_PROMPT = (
     "You are a pandas assistant. Return only Python/pandas code that the user "
     "can copy and paste into a Python REPL. Use only the provided dataframe "
     "names. Do not add explanations unless it is a short Python comment on the "
-    "first line. Prefer concise code."
+    "first line. Prefer concise code. Assume pandas is available. Omit "
+    "`import pandas as pd` unless required. Assume an interactive Python "
+    "session. Prefer bare expressions over `print(...)`."
 )
 
 
@@ -20,12 +23,14 @@ def _coalesce(*values):
 
 
 def load_config(
-    backend="claude",
+    backend=DEFAULT_BACKEND,
     model=None,
     api_key=None,
     base_url=None,
     system_prompt=None,
+    color=None,
     stream=True,
+    stream_parse_code=False,
     stream_output=False,
     stream_delay=0.0,
     timeout=30,
@@ -37,7 +42,7 @@ def load_config(
     env_timeout = os.environ.get("PANDAS_AI_TIMEOUT")
     env_base_url = os.environ.get("PANDAS_AI_BASE_URL")
 
-    backend_name = _coalesce(backend, env_backend) or "claude"
+    backend_name = _coalesce(backend, env_backend) or DEFAULT_BACKEND
     backend_name = str(backend_name).strip().lower()
 
     resolved_timeout = int(_coalesce(timeout, env_timeout) or 30)
@@ -61,7 +66,9 @@ def load_config(
         "model": resolved_model,
         "api_key": resolved_api_key,
         "base_url": resolved_base_url,
+        "color": color,
         "stream": bool(stream),
+        "stream_parse_code": bool(stream_parse_code),
         "stream_output": bool(stream_output),
         "stream_delay": float(stream_delay or 0.0),
         "stream_handler": extra.get("stream_handler") if extra else None,

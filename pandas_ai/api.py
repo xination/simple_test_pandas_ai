@@ -1,16 +1,18 @@
-from .config import load_config
+from .config import DEFAULT_BACKEND, load_config
 from .session import AISession
 
 _SESSION = None
 
 
 def setup_ai(
-    backend="claude",
+    backend=DEFAULT_BACKEND,
     model=None,
     api_key=None,
     base_url=None,
     system_prompt=None,
+    color=None,
     stream=True,
+    stream_parse_code=False,
     stream_output=False,
     stream_delay=0.0,
     timeout=30,
@@ -25,7 +27,9 @@ def setup_ai(
         api_key=api_key,
         base_url=base_url,
         system_prompt=system_prompt,
+        color=color,
         stream=stream,
+        stream_parse_code=stream_parse_code,
         stream_output=stream_output,
         stream_delay=stream_delay,
         timeout=timeout,

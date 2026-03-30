@@ -2,7 +2,7 @@ import builtins
 import sys
 
 from . import api as api_module
-from .session import AIResult, _default_stream_handler
+from .session import AIResult, _apply_color, _default_stream_handler
 
 def color_stream_handler(chunk):
     print(chunk, end="", flush=True)
@@ -22,7 +22,7 @@ def enable_ai_result_displayhook():
             if has_visible_stream_output:
                 print("")
             else:
-                print(value)
+                print(_apply_color(str(value), color=getattr(session, "color", None)))
             builtins._ = value
             return
         original_displayhook(value)

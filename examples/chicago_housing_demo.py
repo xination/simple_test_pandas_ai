@@ -10,7 +10,7 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from pandas_ai import ask_ai, setup_ai
-from pandas_ai.interactive import color_stream_handler, enable_ai_result_displayhook
+from pandas_ai.interactive import enable_ai_result_displayhook
 
 
 def build_demo_dataframe():
@@ -33,14 +33,22 @@ def build_demo_dataframe():
 if __name__ == "__main__":
     df = build_demo_dataframe()
 
-    use_stream = False
-
+    use_stream = True
+    enable_ai_result_displayhook()
     if use_stream:
-        enable_ai_result_displayhook()
-        setup_ai(stream=True, stream_delay=1.0, stream_handler=color_stream_handler)
-    else:
-        enable_ai_result_displayhook()
-        setup_ai(stream=False)
+        
+        setup_ai(   backend="lmstudio",
+                    base_url="http://192.168.40.1:1234/v1",
+                    model="google/gemma-3-4b",
+                    stream=True, 
+                    stream_output=True,
+                    stream_parse_code=True,
+                    stream_delay=0.1, 
+                    color="\033[32m",
+                    )
+    else:        
+        setup_ai(   stream=False,
+                    color="\033[32m",)
 
     print("""try -> ask_ai("average list_price by community_area" )""")
   

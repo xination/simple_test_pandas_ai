@@ -6,7 +6,7 @@
 
 公開 API：
 
-- `setup_ai(..., stream=True, stream_output=False, stream_delay=0.0, stream_handler=None)`
+- `setup_ai(..., color=None, stream=True, stream_output=False, stream_delay=0.0, stream_handler=None)`
 - `ask_ai(text, dfs=None, output_format="text")`
 
 參考 repo：
@@ -42,9 +42,10 @@
 
 已完成：
 
-- 預設 backend 為透過 Anthropic Messages API 的 `claude`。
-- 預設 Claude model 為 `claude-haiku-4-5-20251001`。
-- 次要 backend 為透過 OpenAI-compatible HTTP API 的 `lmstudio`。
+- 預設 backend 為透過 OpenAI-compatible HTTP API 的 `lmstudio`。
+- 預設 LM Studio base URL 為 `http://192.168.40.1:1234/v1`。
+- 預設 LM Studio model 為 `google/gemma-3-4b`。
+- 仍保留 Anthropic `claude` backend 作為可選替代。
 - 預設已啟用串流模式，會透過 handler 輸出 chunk，同時仍回傳最終結果。
 - `stream_output=True` 會使用內建的 stdout handler。
 - `stream_delay` 可刻意放慢 chunk 處理速度，方便 demo 與人工確認。

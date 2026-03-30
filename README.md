@@ -7,8 +7,9 @@
 
 ## 🚀 專案特色
 
-- 🤖 預設使用 Anthropic Messages API（`backend="claude"`）
-- 🧠 預設模型為 `claude-haiku-4-5-20251001`
+- 🤖 預設使用 LM Studio 相容 API（`backend="lmstudio"`）
+- 🧠 預設模型為 `google/gemma-3-4b`
+- 🌐 預設 `base_url` 為 `http://192.168.40.1:1234/v1`
 - 🏠 支援透過 OpenAI 相容介面串接 LM Studio
 - 📡 串流輸出在 `setup_ai()` 階段設定，且預設啟用
 - 🐍 串流實作只依賴 Python 標準函式庫
@@ -18,7 +19,7 @@
 ```python
 from pandas_ai import setup_ai, ask_ai
 
-setup_ai(backend="claude", api_key="YOUR_ANTHROPIC_KEY")
+setup_ai()
 result = ask_ai("顯示前 5 筆資料", df)
 print(result)
 ```
@@ -39,6 +40,7 @@ print(ask_ai("依照 user_id 合併 df0 和 df1", [df0, df1]))
 
 - `stream=True` 時，`ask_ai()` 仍然會回傳最終結果。
 - `stream_output=True` 可把串流片段直接印到標準輸出。
+- `stream_parse_code=True` 可在文字串流時過濾掉 ` ```python ` 與結尾 ` ``` `。
 - 也可以傳入自訂的 `stream_handler` 來接手處理串流內容。
 - 預設 handler 是靜默的，因此在 REPL 裡不會重複輸出相同內容。
 - 如果你想讓串流顯示慢一點、方便肉眼觀察，可以設定 `stream_delay`。
@@ -47,6 +49,26 @@ print(ask_ai("依照 user_id 合併 df0 和 df1", [df0, df1]))
 setup_ai(stream=True, stream_output=True, stream_delay=0.03)
 result = ask_ai("顯示前 5 筆資料", df)
 ```
+
+```python
+setup_ai(stream=True, stream_output=True, stream_parse_code=True)
+result = ask_ai("顯示前 5 筆資料", df)
+```
+
+```python
+setup_ai(
+    stream=True,
+    stream_output=True,
+    color="\033[102m",  # None 表示不加顏色
+)
+result = ask_ai("顯示前 5 筆資料", df)
+```
+
+- `color=None` 時，不做任何 ANSI 著色。
+- `color="\033[102m"` 這類值可讓內建 stdout 串流輸出帶顏色。
+- `stream_parse_code=True` 只影響串流顯示，不會改變最後 `ask_ai()` 的回傳值。
+- 如果你有啟用 `enable_ai_result_displayhook()`，非串流情況下 REPL 自動顯示的最終結果也會套用同一個顏色。
+- 如果你是自己寫 `print(ask_ai(...))`，顏色不會自動介入，因為 `ask_ai()` 仍維持回傳純文字，避免污染可複製的程式碼字串。
 
 ## 🖥️ REPL 小技巧
 
@@ -87,7 +109,6 @@ enable_ai_result_displayhook()
 - 🤗 本機 Hugging Face 串流範例：`examples/example2_local_qwen_stream.py`
 
 ```bash
-export ANTHROPIC_API_KEY="your_api_key"
 python examples/chicago_housing_demo.py
 ```
 

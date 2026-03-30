@@ -1,17 +1,20 @@
 import io
 import json
 import os
+import sys
 import unittest
 from unittest import mock
 from urllib import error
 
 from pandas_ai import ask_ai, setup_ai
 from pandas_ai import api as api_module
+from pandas_ai import interactive as interactive_module
 from pandas_ai.backends.anthropic import AnthropicBackend
 from pandas_ai.backends.openai_compat import OpenAICompatBackend
-from pandas_ai.config import DEFAULT_ANTHROPIC_MODEL, DEFAULT_LMSTUDIO_MODEL, load_config
+from pandas_ai.config import DEFAULT_BACKEND, DEFAULT_LMSTUDIO_BASE_URL, DEFAULT_LMSTUDIO_MODEL, DEFAULT_SYSTEM_PROMPT, load_config
 from pandas_ai.errors import BackendError, ConfigurationError
 from pandas_ai.parsing import extract_code
+from pandas_ai.session import AIResult
 
 
 class DummyResponse(object):
@@ -97,19 +100,21 @@ class ConfigTests(unittest.TestCase):
     def tearDown(self):
         api_module._SESSION = None
 
-    @mock.patch.dict(os.environ, {"ANTHROPIC_API_KEY": "env-key", "PANDAS_AI_MODEL": "env-model"}, clear=False)
+    @mock.patch.dict(os.environ, {"PANDAS_AI_MODEL": "env-model"}, clear=False)
     def test_load_config_uses_env_defaults(self):
         config = load_config()
-        self.assertEqual("claude", config["backend"])
-        self.assertEqual("env-key", config["api_key"])
+        self.assertEqual(DEFAULT_BACKEND, config["backend"])
+        self.assertEqual("not-needed", config["api_key"])
         self.assertEqual("env-model", config["model"])
         self.assertTrue(config["stream"])
         self.assertEqual(0.0, config["stream_delay"])
 
     @mock.patch.dict(os.environ, {}, clear=True)
-    def test_load_config_uses_default_claude_model(self):
+    def test_load_config_uses_default_backend_defaults(self):
         config = load_config()
-        self.assertEqual(DEFAULT_ANTHROPIC_MODEL, config["model"])
+        self.assertEqual(DEFAULT_BACKEND, config["backend"])
+        self.assertEqual(DEFAULT_LMSTUDIO_MODEL, config["model"])
+        self.assertEqual(DEFAULT_LMSTUDIO_BASE_URL, config["base_url"])
         self.assertTrue(config["stream"])
         self.assertEqual(0.0, config["stream_delay"])
 
@@ -117,7 +122,17 @@ class ConfigTests(unittest.TestCase):
     def test_load_config_uses_default_lmstudio_model(self):
         config = load_config(backend="lmstudio")
         self.assertEqual(DEFAULT_LMSTUDIO_MODEL, config["model"])
-        self.assertEqual("http://127.0.0.1:1234/v1", config["base_url"])
+        self.assertEqual(DEFAULT_LMSTUDIO_BASE_URL, config["base_url"])
+
+    def test_load_config_accepts_color(self):
+        config = load_config(color="\033[102m")
+        self.assertEqual("\033[102m", config["color"])
+
+    def test_default_system_prompt_mentions_pandas_is_available(self):
+        self.assertIn("Assume pandas is available.", DEFAULT_SYSTEM_PROMPT)
+        self.assertIn("Omit `import pandas as pd` unless required.", DEFAULT_SYSTEM_PROMPT)
+        self.assertIn("Assume an interactive Python session.", DEFAULT_SYSTEM_PROMPT)
+        self.assertIn("Prefer bare expressions over `print(...)`.", DEFAULT_SYSTEM_PROMPT)
 
 
 class BackendTests(unittest.TestCase):
@@ -248,10 +263,12 @@ class PublicApiTests(unittest.TestCase):
     def tearDown(self):
         api_module._SESSION = None
 
-    @mock.patch.dict(os.environ, {"ANTHROPIC_API_KEY": "abc"}, clear=True)
-    def test_setup_ai_creates_default_claude_session(self):
+    @mock.patch.dict(os.environ, {}, clear=True)
+    def test_setup_ai_creates_default_lmstudio_session(self):
         setup_ai()
-        self.assertEqual("claude", api_module._SESSION.backend.name)
+        self.assertEqual("lmstudio", api_module._SESSION.backend.name)
+        self.assertEqual("google/gemma-3-4b", api_module._SESSION.backend.model)
+        self.assertEqual("http://192.168.40.1:1234/v1", api_module._SESSION.backend.base_url)
         self.assertTrue(api_module._SESSION.stream)
 
     def test_setup_ai_can_switch_to_lmstudio(self):
@@ -272,9 +289,17 @@ class PublicApiTests(unittest.TestCase):
         setup_ai(stream=True, stream_output=True)
         self.assertTrue(api_module._SESSION.stream_output)
 
+    def test_setup_ai_accepts_stream_parse_code(self):
+        setup_ai(stream=True, stream_parse_code=True)
+        self.assertTrue(api_module._SESSION.stream_parse_code)
+
     def test_setup_ai_accepts_stream_delay(self):
         setup_ai(stream=True, stream_delay=0.25)
         self.assertEqual(0.25, api_module._SESSION.stream_delay)
+
+    def test_setup_ai_accepts_color(self):
+        setup_ai(color="\033[102m")
+        self.assertEqual("\033[102m", api_module._SESSION.color)
 
     def test_ask_ai_accepts_single_dataframe(self):
         backend = FakeBackend()
@@ -342,6 +367,23 @@ class PublicApiTests(unittest.TestCase):
         self.assertEqual("result = df['value'].sum()", result)
         self.assertEqual(["```python\n", "result = df['value'].sum()\n", "```"], handler.chunks)
 
+    def test_ask_ai_stream_parse_code_hides_fences(self):
+        backend = FakeBackend()
+        handler = CollectingHandler()
+        api_module._SESSION = api_module.AISession(
+            backend=backend,
+            system_prompt="sys",
+            stream=True,
+            stream_parse_code=True,
+            stream_handler=handler,
+        )
+        df = DummyDataFrame({"value": [1, 2, 3]})
+
+        result = ask_ai("sum the column", dfs=df)
+
+        self.assertEqual("result = df['value'].sum()", result)
+        self.assertEqual(["result = df['value'].sum()"], handler.chunks)
+
     @mock.patch("pandas_ai.session.time.sleep")
     def test_ask_ai_stream_delay_sleeps_per_chunk(self, mocked_sleep):
         backend = FakeBackend()
@@ -400,6 +442,41 @@ class PublicApiTests(unittest.TestCase):
         self.assertEqual(3, mocked_stdout.write.call_count)
         mocked_stdout.flush.assert_called()
 
+    @mock.patch("sys.stdout")
+    def test_ask_ai_stream_output_applies_color(self, mocked_stdout):
+        backend = FakeBackend()
+        api_module._SESSION = api_module.AISession(
+            backend=backend,
+            system_prompt="sys",
+            stream=True,
+            stream_output=True,
+            color="\033[102m",
+        )
+        df = DummyDataFrame({"value": [1, 2, 3]})
+
+        ask_ai("sum the column", dfs=df)
+
+        mocked_stdout.write.assert_any_call("\033[102m```python\n\033[0m")
+        mocked_stdout.write.assert_any_call("\033[102mresult = df['value'].sum()\n\033[0m")
+        mocked_stdout.write.assert_any_call("\033[102m```\033[0m")
+
+    @mock.patch("sys.stdout")
+    def test_ask_ai_stream_parse_code_output_applies_color_without_fences(self, mocked_stdout):
+        backend = FakeBackend()
+        api_module._SESSION = api_module.AISession(
+            backend=backend,
+            system_prompt="sys",
+            stream=True,
+            stream_parse_code=True,
+            stream_output=True,
+            color="\033[102m",
+        )
+        df = DummyDataFrame({"value": [1, 2, 3]})
+
+        ask_ai("sum the column", dfs=df)
+
+        mocked_stdout.write.assert_called_once_with("\033[102mresult = df['value'].sum()\033[0m")
+
     def test_ask_ai_json_stream_parses_only_at_final(self):
         backend = JsonBackend()
         handler = CollectingHandler()
@@ -415,6 +492,29 @@ class PublicApiTests(unittest.TestCase):
 
         self.assertEqual('{"ok": true, "rows": 3}', result)
         self.assertEqual(['{"ok": ', 'true, ', '"rows": 3}'], handler.chunks)
+
+
+class InteractiveTests(unittest.TestCase):
+    def tearDown(self):
+        api_module._SESSION = None
+
+    @mock.patch("builtins.print")
+    def test_displayhook_applies_color_for_non_stream_result(self, mocked_print):
+        original_displayhook = sys.displayhook
+        try:
+            api_module._SESSION = api_module.AISession(
+                backend=FakeBackend(),
+                system_prompt="sys",
+                stream=False,
+                color="\033[102m",
+            )
+            interactive_module.enable_ai_result_displayhook()
+
+            sys.displayhook(AIResult("result = df.head()"))
+
+            mocked_print.assert_called_once_with("\033[102mresult = df.head()\033[0m")
+        finally:
+            sys.displayhook = original_displayhook
 
 
 if __name__ == "__main__":
